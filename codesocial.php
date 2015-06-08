@@ -26,7 +26,7 @@ class CodeSocial
                     'Accept: application/json',
                     'Content-Length: ' . strlen($data)));
             } else 
-            {
+            { 
                 echo "The post field array is empty";
                 error_log("The post field array is empty", 0); //log error to the error_log file.
                 exit;

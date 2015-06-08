@@ -64,7 +64,7 @@ Result:
 {"processing":[{"to_process":20000,"timestamp":1433635513,"state":"processing","processed":1500,"module":"instagram","destination":"justinbieber","category":"followers"}],"completed":[]}
 ```
 
-#POST /taks
+#POST /tasks
 
 Create an array which includes id of the product,destination and quantity
 

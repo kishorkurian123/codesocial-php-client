@@ -1,36 +1,63 @@
 <?php
+/*
+| -------------------------------------------------------------------
+| PHP Api client for Codesocial REST API
+| -------------------------------------------------------------------
+| Simple, easy to use library to use Codesocial REST API
+|
+| For complete instructions on how to use the library,please check the readme file.
+| 
+|   Author  : Kishor Kurian aka Repulsor
+|   Contact : repulsorbhw (Skype)
+|
+|  “Any fool can write code that a computer can understand. Good programmers write code that humans can understand.”
+|   -Martin Fowler
+| -------------------------------------------------------------------
+
 class CodeSocial
 {
     //Store token and url to use through out the class.
     private $access_token;
-    private $apiurl;
-    public function __construct($token, $apihost, $version)
+    private $apiurl = "http://DOMAINNAME.com/api/v1/";
+    private $errortrigger; //production mode(0), Fatal(1), notice(2)
+    
+    public function __construct($token, $state = 0)//defaults to production mode. No error messages.
     {
         //set token and api url
         $this->access_token = $token;
-        $this->apiurl = $apihost . "/api/v" . $version;
+        $this->errortrigger = $state;
     }
-      //Curl function for GET and POST request
+    private function errorhandler($errormessage)
+    {
+        if ($this->errortrigger == 0)
+        {
+             //no error message to the user, but errors are logged - Production mode
+            error_log($errormessage,0);
+           
+        }
+        elseif ($this->errortrigger == 1)
+        {
+            //Development mode - Library will throw fatal errors
+            trigger_error($errormessage, E_USER_ERROR);
+        } else
+        {
+            //Shows notices on errors. Script execution continues, A False may be returned instead of expected response.
+            trigger_error($errormessage);
+        }
+    }
+    //Curl function for GET and POST request
     private function Curl($endpoint, $type = "GET", $data = null)
     {
         $ch = curl_init();
         if ($type == "POST")
         {
-            if ($data !== null)
-            {
-                $endpoint = $this->apiurl . $endpoint;
-                curl_setopt($ch, CURLOPT_POST, 1);
-                curl_setopt($ch, CURLOPT_POSTFIELDS, $data);
-                curl_setopt($ch, CURLOPT_HTTPHEADER, array(
-                    'Content-Type: application/json',
-                    'Accept: application/json',
-                    'Content-Length: ' . strlen($data)));
-            } else 
-            {
-                echo "The post field array is empty";
-                error_log("The post field array is empty", 0); //log error to the error_log file.
-                exit;
-            }
+            $endpoint = $this->apiurl . $endpoint;
+            curl_setopt($ch, CURLOPT_POST, 1);
+            curl_setopt($ch, CURLOPT_POSTFIELDS, $data);
+            curl_setopt($ch, CURLOPT_HTTPHEADER, array(
+                'Content-Type: application/json',
+                'Accept: application/json',
+                'Content-Length: ' . strlen($data)));
         } else
         {
             $endpoint = $this->apiurl . $endpoint . "/?token=$this->access_token";
@@ -42,67 +69,63 @@ class CodeSocial
         $response = curl_exec($ch);
         //check for curl errors, log and die incase of errors.Possible cases like Site outage etc.
         if (!$response)
-        {
-            echo curl_error($ch);
-            error_log(curl_error($ch), 0);
+        {   //includes all possible curl errors. Timeouts,unreachable and all those.
+            $this->errorhandler(curl_error($ch));
+            return false;
         } else
-        {
-            return ($response);
+        { //success - valid response. jscon_decode it.
+            return json_decode($response,TRUE);
         }
     }
-    
-    //get endpoints, a TRUE parameter will return an array.FALSE will give JSON as is. 
-    //Default is set to TRUE
-    public function GetBalance($bool=TRUE)
+//GET End points. Returns array response
+    public function GetBalance()
     {
         $curlresponse = $this->curl("/balance");
-        if ($bool)
-        {
-            return json_decode($curlresponse, true);
-        } else
-        {
-            return $curlresponse;
-        }
+        return $curlresponse;
     }
-    public function GetProducts($bool=TRUE)
+    public function GetProducts()
     {
         $curlresponse = $this->curl("/products");
-        if ($bool)
-        {
-            return json_decode($curlresponse, true);
-        } else
-        {
-            return $curlresponse;
-        }
+        return $curlresponse;
     }
-    public function GetTasks($bool=TRUE)
+    public function GetTasks()
     {
         $curlresponse = $this->curl("/tasks");
-        if ($bool)
-        {
-            return json_decode($curlresponse, true);
-        } else
-        {
-            return $curlresponse;
-        }
+        return $curlresponse;
     }
-    //CreateTask - $data parameter is an array of id,description and quantity. Accesstoken is appended automagically.
-    public function CreateTask($data, $bool=TRUE)
+    
+    //CreateTask - Parameters are  id,destiation and quantity. Accesstoken is appended automagically.
+    public function CreateTask($id = null, $destination = null, $quantity = null)
     {
-        //TO DO - check if all required array elements are not empty or null
-        //typecast id and quantity to int.
-        $data["id"] = (int)$data["id"];
-        $data["quantity"] = (int)$data["quantity"];
-        //append access_token
-        $data["token"]= $this->access_token;
-        $curlresponse = $this->curl("/tasks", "POST", json_encode($data));
-        //return data as array or JSON
-        if ($bool)
+        //check if any values are null, trigger an error if any of them is null
+        if ($id == null || $destination == null || $quantity == null)
         {
-            return json_decode($curlresponse, true);
+            $this->errorhandler("CreateTask() Function invalid or missing parameters");
+            return false;
+        }
+        //check if id and quantity are int and trigger an error if they arent.
+        if (!is_int($id) || !is_int($quantity))
+        {
+            $this->errorhandler("CreateTask() id and quantity must be an int");
+            return false;
         } else
         {
-            return $curlresponse;
+            //set the array.
+            $data["id"] = $id;
+            $data["quantity"] = $quantity;
         }
+        //destination - Can be array or string. Error if its of another datatype 
+        if(is_array($destination) || is_string($destination)){
+        $data["destination"] = $destination;
+        }
+        else{
+            $this->errorhandler("CreateTask() Destination is not of the expected data type");
+        }
+        //append access_token to the array elements
+        $data["token"] = $this->access_token;
+        //Make the call
+        $curlresponse = $this->curl("/tasks", "POST", json_encode($data));
+        //return data as array 
+        return $curlresponse;
     }
 }
